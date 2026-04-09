@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # ---------- CONFIG ----------
-st.set_page_config(page_title="Mushroom Intelligence", layout="wide")
+st.set_page_config(page_title="Mushroom Dashboard", layout="wide")
 
 # ---------- AUTH ----------
 scope = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -15,66 +15,75 @@ creds = Credentials.from_service_account_info(
 client = gspread.authorize(creds)
 
 SHEET_ID = "10a986fGptAR1LbS5NloJjvqM00LwGEWuwnmllf-MBXI"
-
 sheet = client.open_by_key(SHEET_ID)
 
-sales = pd.DataFrame(sheet.worksheet("Sales_Log").get_all_records())
-production = pd.DataFrame(sheet.worksheet("Production_Log").get_all_records())
-wastage = pd.DataFrame(sheet.worksheet("Wastage_Log").get_all_records())
-expenses = pd.DataFrame(sheet.worksheet("Expense_Log").get_all_records())
+# ---------- LOAD AVAILABLE TABS ----------
+tabs = {ws.title: ws for ws in sheet.worksheets()}
+
+st.write("📄 Available Tabs:", list(tabs.keys()))
+
+# ---------- LOAD SALES ----------
+if "Sales_Log" in tabs:
+    sales = pd.DataFrame(tabs["Sales_Log"].get_all_records())
+else:
+    st.error("❌ Sales_Log tab not found")
+    st.stop()
+
 # ---------- CLEAN ----------
-def clean(df):
-    df.columns = df.columns.str.strip()
-    return df
-
-sales, production, wastage, expenses = map(clean, [sales, production, wastage, expenses])
-
+sales.columns = sales.columns.str.strip()
 sales['Quantity_Sold'] = pd.to_numeric(sales['Quantity_Sold'], errors='coerce')
 sales['Rate'] = pd.to_numeric(sales['Rate'], errors='coerce')
-production['Quantity_Produced'] = pd.to_numeric(production['Quantity_Produced'], errors='coerce')
-wastage['Quantity_Wasted'] = pd.to_numeric(wastage['Quantity_Wasted'], errors='coerce')
-expenses['Amount'] = pd.to_numeric(expenses['Amount'], errors='coerce')
+
+sales = sales.dropna(subset=['Quantity_Sold', 'Rate'])
 
 sales['Total'] = sales['Quantity_Sold'] * sales['Rate']
 
 # ---------- KPIs ----------
 total_revenue = sales['Total'].sum()
-total_cost = expenses['Amount'].sum()
-profit = total_revenue - total_cost
-roi = profit / total_cost if total_cost != 0 else 0
-
-total_production = production['Quantity_Produced'].sum()
-total_wastage = wastage['Quantity_Wasted'].sum()
-
-wastage_percent = (total_wastage / total_production) * 100 if total_production != 0 else 0
-efficiency = (sales['Quantity_Sold'].sum() / total_production) * 100 if total_production != 0 else 0
+total_qty = sales['Quantity_Sold'].sum()
+avg_price = total_revenue / total_qty if total_qty != 0 else 0
 
 # ---------- UI ----------
-st.title("🍄 Mushroom Intelligence Dashboard")
+st.title("🍄 Mushroom Farm Dashboard")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
-col1.metric("💰 Revenue", f"₹{total_revenue:.0f}")
-col2.metric("💸 Cost", f"₹{total_cost:.0f}")
-col3.metric("📈 Profit", f"₹{profit:.0f}")
-col4.metric("ROI", f"{roi*100:.2f}%")
-
-st.markdown("---")
-
-st.subheader("📈 Sales Trend")
-sales['Date'] = pd.to_datetime(sales['Date'])
-daily_sales = sales.groupby('Date')['Total'].sum()
-st.line_chart(daily_sales)
+col1.metric("💰 Total Revenue", f"₹{total_revenue:.0f}")
+col2.metric("📦 Total Quantity", f"{total_qty:.0f} kg")
+col3.metric("💵 Avg Price", f"₹{avg_price:.2f}")
 
 st.markdown("---")
 
+# ---------- CHART ----------
+st.subheader("📈 Revenue Trend")
+
+sales['Date'] = pd.to_datetime(sales['Date'], errors='coerce')
+daily = sales.groupby('Date')['Total'].sum()
+
+st.line_chart(daily)
+
+# ---------- OPTIONAL EXTRA TABS ----------
+st.markdown("---")
+st.subheader("📊 Additional Data")
+
+if "Expense_Log" in tabs:
+    expenses = pd.DataFrame(tabs["Expense_Log"].get_all_records())
+    expenses['Amount'] = pd.to_numeric(expenses['Amount'], errors='coerce')
+    total_cost = expenses['Amount'].sum()
+    st.metric("💸 Total Cost", f"₹{total_cost:.0f}")
+
+if "Production" in tabs:
+    production = pd.DataFrame(tabs["Production"].get_all_records())
+    st.write("🍄 Production Data", production.head())
+
+# ---------- INSIGHTS ----------
+st.markdown("---")
 st.subheader("🧠 Insights")
 
-if wastage_percent > 10:
-    st.warning("⚠️ High wastage detected")
+if total_revenue > 0:
+    st.success("📈 Business is generating revenue")
 
-if roi < 0:
-    st.error("❌ Loss detected")
+if avg_price < 30:
+    st.warning("⚠️ Low pricing — consider increasing rate")
 
-if efficiency > 80:
-    st.success("🔥 High efficiency")
+st.caption("Live data from Google Sheets")
