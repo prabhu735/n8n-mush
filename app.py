@@ -14,14 +14,14 @@ creds = Credentials.from_service_account_info(
 )
 client = gspread.authorize(creds)
 
-SHEET_NAME = "Dashboards"
+SHEET_ID = "10a986fGptAR1LbS5NloJjvqM00LwGEWuwnmllf-MBXI"
 
-# ---------- LOAD DATA ----------
-sales = pd.DataFrame(client.open(SHEET_NAME).worksheet("Sales_Log").get_all_records())
-production = pd.DataFrame(client.open(SHEET_NAME).worksheet("Production_Log").get_all_records())
-wastage = pd.DataFrame(client.open(SHEET_NAME).worksheet("Wastage_Log").get_all_records())
-expenses = pd.DataFrame(client.open(SHEET_NAME).worksheet("Expense_Log").get_all_records())
+sheet = client.open_by_key(SHEET_ID)
 
+sales = pd.DataFrame(sheet.worksheet("Sales_Log").get_all_records())
+production = pd.DataFrame(sheet.worksheet("Production_Log").get_all_records())
+wastage = pd.DataFrame(sheet.worksheet("Wastage_Log").get_all_records())
+expenses = pd.DataFrame(sheet.worksheet("Expense_Log").get_all_records())
 # ---------- CLEAN ----------
 def clean(df):
     df.columns = df.columns.str.strip()
